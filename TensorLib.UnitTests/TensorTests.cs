@@ -1,4 +1,4 @@
-namespace TorchLib.UnitTests;
+namespace TensorLib.UnitTests;
 
 public class TensorTests
 {

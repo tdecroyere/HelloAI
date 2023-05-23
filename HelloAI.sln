@@ -5,9 +5,9 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloAI", "HelloAI\HelloAI.csproj", "{984A77C5-A4CE-4245-A482-476BA784FB94}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TorchLib", "TorchLib\TorchLib.csproj", "{3BADD363-8DC3-469E-9CB0-31DF764C2270}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TorchLib", "TensorLib\TensorLib.csproj", "{3BADD363-8DC3-469E-9CB0-31DF764C2270}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TorchLib.UnitTests", "TorchLib.UnitTests\TorchLib.UnitTests.csproj", "{67F878AF-5B18-48AC-BA91-54971EDB1508}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TorchLib.UnitTests", "TensorLib.UnitTests\TensorLib.UnitTests.csproj", "{67F878AF-5B18-48AC-BA91-54971EDB1508}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

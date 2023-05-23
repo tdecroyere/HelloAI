@@ -1,4 +1,4 @@
-namespace TorchLib;
+namespace TensorLib;
 
 public class Torch
 {

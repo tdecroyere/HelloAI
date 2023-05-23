@@ -1,4 +1,4 @@
-namespace TorchLib;
+namespace TensorLib;
 
 public readonly record struct Tensor
 {
@@ -81,7 +81,7 @@ public readonly record struct Tensor
 
                         for (var k = 0; k < padding; k++)
                         {
-                            output.Append(" ");
+                            output.Append(' ');
                         }
                     }
                     else
@@ -200,5 +200,4 @@ public readonly record struct Tensor
         
         return result;
     }
-    
 }

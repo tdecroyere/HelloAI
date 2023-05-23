@@ -1,4 +1,4 @@
-﻿using TorchLib;
+﻿using TensorLib;
 
 var trainingData = new float[,]
 {
@@ -7,26 +7,6 @@ var trainingData = new float[,]
     { 0.0f, 1.0f, 1.0f },
     { 1.0f, 1.0f, 0.0f }
 };
-
-float LossFunction(float w1, float w2, float b)
-{
-    var result = 0.0f;
-
-    for (var i = 0; i < trainingData.GetLength(0); i++)
-    {
-        var x1 = trainingData[i, 0];
-        var x2 = trainingData[i, 1];
-
-        var y = SigmoidF(x1 * w1 + x2 * w2 + b);
-        var testResult = trainingData[i, 2];
-
-        var d = y - testResult;
-        result += d * d;
-    }
-
-    result /= trainingData.GetLength(0);
-    return result;
-}
 
 float Linear(Torch torch, float x1, float x2, Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
 {
@@ -61,11 +41,6 @@ float LossFunctionTensor(Torch torch, Tensor inputLayerWeights, Tensor inputLaye
     return result;
 }
 
-float SigmoidF(float x)
-{
-    return 1.0f / (1.0f + MathF.Exp(-x));
-}
-
 Tensor Sigmoid(Torch torch, Tensor x)
 {
     // TODO: Create an exp method in torch
@@ -78,8 +53,8 @@ Tensor Sigmoid(Torch torch, Tensor x)
     return result;
 }
 
-var epsilon = 0.001f;
-var learningRate = 0.01f;
+var epsilon = 0.01f;
+var learningRate = 0.1f;
 
 // Test
 var torch = new Torch();
@@ -96,7 +71,7 @@ var lossTensor = LossFunctionTensor(torch, inputLayerWeights, inputLayerBias, ou
 Console.WriteLine($"iw: {inputLayerWeights} ib: {inputLayerBias}, ow: {outputLayerWeights} ob: {outputLayerBias}, Loss: {lossTensor}");
 
 // Training
-for (var i = 0; i < 200000; i++)
+for (var i = 0; i < 100000; i++)
 {
     var loss = LossFunctionTensor(torch, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
 
@@ -107,6 +82,7 @@ for (var i = 0; i < 200000; i++)
     var copyOutputBias = outputLayerBias.Copy();
 
     // HACK: Really slow!
+    // TODO: Don't do a copy but only save the modified variable and restore it
     for (var j = 0; j < inputLayerWeights.ElementCount; j++)
     {
         var copy = inputLayerWeights.Copy();
@@ -156,7 +132,7 @@ for (var i = 0; i < 2; i++)
         var x2 = (float)j;
         
         var y = Linear(torch, x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
-        Console.WriteLine($"Test calcul: {x1} | {x2} = {y}");
+        Console.WriteLine($"{x1} ^ {x2} = {y}");
     }
 }
 
