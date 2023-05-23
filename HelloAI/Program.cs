@@ -8,20 +8,17 @@ var trainingData = new float[,]
     { 1.0f, 1.0f, 0.0f }
 };
 
-float Linear(Torch torch, float x1, float x2, Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
+float Linear(float x1, float x2, Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
 {
-    // TODO: Do some kind of tensor repeating when we are out of bound?
-    var input = torch.Tensor(new float[] { x1, x2 }, 2, 1);
+    var input = new Tensor(1, 2, new float[] { x1, x2 });
 
-    var y = Sigmoid(torch, input * inputLayerWeights + inputLayerBias);
-    y = Sigmoid(torch, y * outputLayerWeights + outputLayerBias);
-
-    //y = Sigmoid(torch, input * outputLayerWeights + outputLayerBias);
+    var y = Sigmoid(input * inputLayerWeights + inputLayerBias);
+    y = Sigmoid(y * outputLayerWeights + outputLayerBias);
 
     return y[0];
 }
 
-float LossFunctionTensor(Torch torch, Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
+float LossFunctionTensor(Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
 {
     var result = 0.0f;
 
@@ -31,7 +28,7 @@ float LossFunctionTensor(Torch torch, Tensor inputLayerWeights, Tensor inputLaye
         var x2 = trainingData[j, 1];
         var testResult = trainingData[j, 2];
 
-        var y = Linear(torch, x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+        var y = Linear(x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
 
         var d = y - testResult;
         result += d * d;
@@ -41,10 +38,10 @@ float LossFunctionTensor(Torch torch, Tensor inputLayerWeights, Tensor inputLaye
     return result;
 }
 
-Tensor Sigmoid(Torch torch, Tensor x)
+Tensor Sigmoid(Tensor x)
 {
-    // TODO: Create an exp method in torch
-    var result = torch.Zeros((int)x.Size.X, (int)x.Size.Y);
+    // TODO: Create an exp method in factory
+    var result = new Tensor(x.Rows, x.Columns);
 
     for (var i = 0; i < x.ElementCount; i++)
     {
@@ -53,27 +50,40 @@ Tensor Sigmoid(Torch torch, Tensor x)
     return result;
 }
 
+void PrintParameters(Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias, float loss)
+{
+    Console.WriteLine($"iw: {inputLayerWeights}");
+    Console.WriteLine($"ib: {inputLayerBias}");
+    Console.WriteLine($"ow: {outputLayerWeights}");
+    Console.WriteLine($"ob: {outputLayerBias}");
+    Console.WriteLine($"Loss: {loss}");
+}
+
 var epsilon = 0.01f;
 var learningRate = 0.1f;
 
 // Test
-var torch = new Torch();
+var random = new Random(28);
 
-// BUG: If we multiply the weights there is an error :()
-var inputLayerWeights = (torch.Random(2, 2) - 0.5f) * 2.0f;
-var inputLayerBias = (torch.Random(2, 1) - 0.5f) * 2.0f;
-var outputLayerWeights = (torch.Random(1, 2) - 0.5f) * 2.0f;
-var outputLayerBias = (torch.Random(1, 1) - 0.5f) * 2.0f;
+float GenerateValue(int rowIndex, int columnIndex)
+{
+    return (random.NextSingle() - 0.5f) * 2.0f;
+}
+
+// BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
+var inputLayerWeights = new Tensor(2, 2, GenerateValue);
+var inputLayerBias = new Tensor(1, 2, GenerateValue);
+var outputLayerWeights = new Tensor(2, 1, GenerateValue);
+var outputLayerBias = new Tensor(1, 1, GenerateValue);
+var lossTensor = LossFunctionTensor(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
 
 Console.WriteLine("===== Tensors =====");
-
-var lossTensor = LossFunctionTensor(torch, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
-Console.WriteLine($"iw: {inputLayerWeights} ib: {inputLayerBias}, ow: {outputLayerWeights} ob: {outputLayerBias}, Loss: {lossTensor}");
+PrintParameters(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias, lossTensor);
 
 // Training
 for (var i = 0; i < 100000; i++)
 {
-    var loss = LossFunctionTensor(torch, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+    var loss = LossFunctionTensor(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
 
     // HACK: Really slow!
     var copyInputWeight = inputLayerWeights.Copy();
@@ -87,7 +97,7 @@ for (var i = 0; i < 100000; i++)
     {
         var copy = inputLayerWeights.Copy();
         copy[j] += epsilon;
-        var newLoss = LossFunctionTensor(torch, copy, copyInputBias, copyOutputWeight, copyOutputBias);
+        var newLoss = LossFunctionTensor(copy, copyInputBias, copyOutputWeight, copyOutputBias);
         var diff = (newLoss - loss) / epsilon;
         inputLayerWeights[j] -= diff * learningRate;
     }
@@ -96,7 +106,7 @@ for (var i = 0; i < 100000; i++)
     {
         var copy = inputLayerBias.Copy();
         copy[j] += epsilon;
-        var diff = (LossFunctionTensor(torch, copyInputWeight, copy, copyOutputWeight, copyOutputBias) - loss) / epsilon;
+        var diff = (LossFunctionTensor(copyInputWeight, copy, copyOutputWeight, copyOutputBias) - loss) / epsilon;
         inputLayerBias[j] -= diff * learningRate;
     }
 
@@ -104,7 +114,7 @@ for (var i = 0; i < 100000; i++)
     {
         var copy = outputLayerWeights.Copy();
         copy[j] += epsilon;
-        var diff = (LossFunctionTensor(torch, copyInputWeight, copyInputBias, copy, copyOutputBias) - loss) / epsilon;
+        var diff = (LossFunctionTensor(copyInputWeight, copyInputBias, copy, copyOutputBias) - loss) / epsilon;
         outputLayerWeights[j] -= diff * learningRate;
     }
     
@@ -112,15 +122,16 @@ for (var i = 0; i < 100000; i++)
     {
         var copy = outputLayerBias.Copy();
         copy[j] += epsilon;
-        var diff = (LossFunctionTensor(torch, copyInputWeight, copyInputBias, copyOutputWeight, copy) - loss) / epsilon;
+        var diff = (LossFunctionTensor(copyInputWeight, copyInputBias, copyOutputWeight, copy) - loss) / epsilon;
         outputLayerBias[j] -= diff * learningRate;
     }
 
     //Console.WriteLine($"w: {outputLayerWeights} b: {outputLayerBias}, Loss: {loss}");
 }
 
-var finalLossTensor = LossFunctionTensor(torch, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
-Console.WriteLine($"iw: {inputLayerWeights} ib: {inputLayerBias}, ow: {outputLayerWeights} ob: {outputLayerBias}, Loss: {finalLossTensor}");
+Console.WriteLine("===== AFTER TRAINING =====");
+var finalLossTensor = LossFunctionTensor(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+PrintParameters(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias, finalLossTensor);
 
 Console.WriteLine("===== TEST =====");
 
@@ -131,7 +142,7 @@ for (var i = 0; i < 2; i++)
         var x1 = (float)i;
         var x2 = (float)j;
         
-        var y = Linear(torch, x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+        var y = Linear(x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
         Console.WriteLine($"{x1} ^ {x2} = {y}");
     }
 }
