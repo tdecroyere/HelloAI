@@ -1,5 +1,7 @@
 namespace TensorLib;
 
+// TODO: Memory management?
+
 public readonly record struct Tensor
 {
     private readonly Memory<float> _data;
@@ -32,7 +34,16 @@ public readonly record struct Tensor
         Rows = rows;
         Columns = columns;
 
-        _data = data;
+        _data = new float[data.Length];
+        data.CopyTo(_data);
+    }
+
+    public Tensor(int rows, int columns, Tensor source)
+    {
+        Rows = rows;
+        Columns = columns;
+
+        _data = source._data;
     }
 
     public int Rows { get; }
@@ -165,8 +176,11 @@ public readonly record struct Tensor
 
     public static Tensor Multiply(Tensor tensor1, Tensor tensor2)
     {
-        // TODO: Check compatibility
-        // TODO: Avoid this allocation
+        if (tensor1.Columns != tensor2.Rows)
+        {
+            throw new ArgumentOutOfRangeException(nameof(tensor1), "Tensor1.Columns should be equal to tensor2.Rows");
+        }
+
         var resultData = new Tensor(tensor1.Rows, tensor2.Columns);
 
         for (var i = 0; i < resultData.Rows; i++)
@@ -178,9 +192,7 @@ public readonly record struct Tensor
                 // TODO: Iterate with common dim
                 for (var k = 0; k < tensor1.Columns; k++)
                 {
-                    var element1 = tensor1[i, k];
-                    var element2 = tensor2[k, j];
-                    result += element1 * element2;
+                    result += tensor1[i, k] * tensor2[k, j];
                 }
 
                 resultData[i, j] = result;

@@ -8,17 +8,15 @@ var trainingData = new float[,]
     { 1.0f, 1.0f, 0.0f }
 };
 
-float Linear(float x1, float x2, Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
+float Linear(Tensor inputLayer, Tensor hiddenLayerWeights, Tensor hiddenLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
 {
-    var input = new Tensor(1, 2, new float[] { x1, x2 });
-
-    var y = Sigmoid(input * inputLayerWeights + inputLayerBias);
+    var y = Sigmoid(inputLayer * hiddenLayerWeights + hiddenLayerBias);
     y = Sigmoid(y * outputLayerWeights + outputLayerBias);
 
     return y[0];
 }
 
-float LossFunctionTensor(Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
+float LossFunctionTensor(Tensor hiddenLayerWeights, Tensor hiddenLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias)
 {
     var result = 0.0f;
 
@@ -27,8 +25,11 @@ float LossFunctionTensor(Tensor inputLayerWeights, Tensor inputLayerBias, Tensor
         var x1 = trainingData[j, 0];
         var x2 = trainingData[j, 1];
         var testResult = trainingData[j, 2];
+        
+        // TODO: To Replace
+        var input = new Tensor(1, 2, new float[] { x1, x2 });
 
-        var y = Linear(x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+        var y = Linear(input, hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias);
 
         var d = y - testResult;
         result += d * d;
@@ -50,10 +51,10 @@ Tensor Sigmoid(Tensor x)
     return result;
 }
 
-void PrintParameters(Tensor inputLayerWeights, Tensor inputLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias, float loss)
+void PrintParameters(Tensor hiddenLayerWeights, Tensor hiddenLayerBias, Tensor outputLayerWeights, Tensor outputLayerBias, float loss)
 {
-    Console.WriteLine($"iw: {inputLayerWeights}");
-    Console.WriteLine($"ib: {inputLayerBias}");
+    Console.WriteLine($"iw: {hiddenLayerWeights}");
+    Console.WriteLine($"ib: {hiddenLayerBias}");
     Console.WriteLine($"ow: {outputLayerWeights}");
     Console.WriteLine($"ob: {outputLayerBias}");
     Console.WriteLine($"Loss: {loss}");
@@ -70,44 +71,47 @@ float GenerateValue(int rowIndex, int columnIndex)
     return (random.NextSingle() - 0.5f) * 2.0f;
 }
 
+// TODO: Do we need to explicetely allocate the intermediate results and inputs?
+// For the moment the intermediate tensors data are internally allocated.
+
 // BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
-var inputLayerWeights = new Tensor(2, 2, GenerateValue);
-var inputLayerBias = new Tensor(1, 2, GenerateValue);
+var hiddenLayerWeights = new Tensor(2, 2, GenerateValue);
+var hiddenLayerBias = new Tensor(1, 2, GenerateValue);
 var outputLayerWeights = new Tensor(2, 1, GenerateValue);
 var outputLayerBias = new Tensor(1, 1, GenerateValue);
-var lossTensor = LossFunctionTensor(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+var lossTensor = LossFunctionTensor(hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias);
 
 Console.WriteLine("===== Tensors =====");
-PrintParameters(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias, lossTensor);
+PrintParameters(hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias, lossTensor);
 
 // Training
 for (var i = 0; i < 100000; i++)
 {
-    var loss = LossFunctionTensor(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+    var loss = LossFunctionTensor(hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias);
 
     // HACK: Really slow!
-    var copyInputWeight = inputLayerWeights.Copy();
-    var copyInputBias = inputLayerBias.Copy();
+    var copyInputWeight = hiddenLayerWeights.Copy();
+    var copyInputBias = hiddenLayerBias.Copy();
     var copyOutputWeight = outputLayerWeights.Copy();
     var copyOutputBias = outputLayerBias.Copy();
 
     // HACK: Really slow!
     // TODO: Don't do a copy but only save the modified variable and restore it
-    for (var j = 0; j < inputLayerWeights.ElementCount; j++)
+    for (var j = 0; j < hiddenLayerWeights.ElementCount; j++)
     {
-        var copy = inputLayerWeights.Copy();
+        var copy = hiddenLayerWeights.Copy();
         copy[j] += epsilon;
         var newLoss = LossFunctionTensor(copy, copyInputBias, copyOutputWeight, copyOutputBias);
         var diff = (newLoss - loss) / epsilon;
-        inputLayerWeights[j] -= diff * learningRate;
+        hiddenLayerWeights[j] -= diff * learningRate;
     }
     
-    for (var j = 0; j < inputLayerBias.ElementCount; j++)
+    for (var j = 0; j < hiddenLayerBias.ElementCount; j++)
     {
-        var copy = inputLayerBias.Copy();
+        var copy = hiddenLayerBias.Copy();
         copy[j] += epsilon;
         var diff = (LossFunctionTensor(copyInputWeight, copy, copyOutputWeight, copyOutputBias) - loss) / epsilon;
-        inputLayerBias[j] -= diff * learningRate;
+        hiddenLayerBias[j] -= diff * learningRate;
     }
 
     for (var j = 0; j < outputLayerWeights.ElementCount; j++)
@@ -130,8 +134,8 @@ for (var i = 0; i < 100000; i++)
 }
 
 Console.WriteLine("===== AFTER TRAINING =====");
-var finalLossTensor = LossFunctionTensor(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
-PrintParameters(inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias, finalLossTensor);
+var finalLossTensor = LossFunctionTensor(hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias);
+PrintParameters(hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias, finalLossTensor);
 
 Console.WriteLine("===== TEST =====");
 
@@ -141,8 +145,11 @@ for (var i = 0; i < 2; i++)
     {
         var x1 = (float)i;
         var x2 = (float)j;
+    
+        // TODO: To Replace
+        var input = new Tensor(1, 2, new float[] { x1, x2 });
         
-        var y = Linear(x1, x2, inputLayerWeights, inputLayerBias, outputLayerWeights, outputLayerBias);
+        var y = Linear(input, hiddenLayerWeights, hiddenLayerBias, outputLayerWeights, outputLayerBias);
         Console.WriteLine($"{x1} ^ {x2} = {y}");
     }
 }
