@@ -1,4 +1,5 @@
 ﻿using TensorLib;
+using HelloIA;
 
 Tensor Linear(Tensor inputs, IAModel model)
 {
@@ -14,14 +15,14 @@ float Loss(Tensor trainingInputs, Tensor trainingOutputs, IAModel model)
 
     for (var i = 0; i < trainingInputs.Rows; i++)
     {
-        var testResult = trainingOutputs[i, 0];
-        
-        var inputs = trainingInputs.RowView(i);
+        var inputs = trainingInputs.ViewRow(i);
+        var outputs = trainingOutputs.ViewRow(i);
+
         var y = Linear(inputs, model);
 
         for (var j = 0; j < y.Columns; j++)
         {
-            var d = y[0, j] - testResult;
+            var d = y[j] - outputs[j];
             result += d * d;
         }
     }
@@ -36,28 +37,37 @@ Tensor Sigmoid(Tensor x)
     // TODO: Create an exp method in factory
     var result = new Tensor(x.Rows, x.Columns);
 
-    for (var i = 0; i < x.ElementCount; i++)
+    for (var i = 0; i < x.Rows * x.Columns; i++)
     {
         result[i] = 1.0f / (1.0f + MathF.Exp(-x[i]));
     }
     return result;
 }
 
-void TrainLayer(float loss, Tensor trainingInput, Tensor trainingOutput, Tensor layer, IAModel modelCopy, Tensor layerCopy)
+void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput, IAModel model, Tensor layer, Tensor layerGradients)
 {
     const float epsilon = 0.01f;
+    
+    for (var j = 0; j < layer.Rows * layer.Columns; j++)
+    {
+        var copy = layer[j];
+        layer[j] += epsilon;
+
+        var newLoss = Loss(trainingInput, trainingOutput, model);
+        var diff = (newLoss - loss) / epsilon;
+
+        layer[j] = copy;
+        layerGradients[j] = diff;
+    }
+}
+
+void Learn(Tensor layer, Tensor layerGradients)
+{
     const float learningRate = 0.1f;
     
-    for (var j = 0; j < layerCopy.ElementCount; j++)
+    for (var j = 0; j < layer.Rows * layer.Columns; j++)
     {
-        var copy = layerCopy[j];
-        layerCopy[j] += epsilon;
-
-        var newLoss = Loss(trainingInput, trainingOutput, modelCopy);
-        var diff = (newLoss - loss) / epsilon;
-        layerCopy[j] = copy;
-
-        layer[j] -= diff * learningRate;
+        layer[j] -= layerGradients[j] * learningRate;
     }
 }
 
@@ -67,26 +77,15 @@ void PrintParameters(IAModel model, float loss)
     Console.WriteLine($"ib: {model.HiddenLayerBias}");
     Console.WriteLine($"ow: {model.OutputLayerWeights}");
     Console.WriteLine($"ob: {model.OutputLayerBias}");
+
+    Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine($"Loss: {loss}");
-}
-
-// Test
-var random = new Random(28);
-
-float GenerateValue(int rowIndex, int columnIndex)
-{
-    return (random.NextSingle() - 0.5f) * 2.0f;
+    Console.ForegroundColor = ConsoleColor.Gray;
 }
 
 // BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
-
-var model = new IAModel
-{
-    HiddenLayerWeights = new Tensor(2, 2, GenerateValue),
-    HiddenLayerBias = new Tensor(1, 2, GenerateValue),
-    OutputLayerWeights = new Tensor(2, 1, GenerateValue),
-    OutputLayerBias = new Tensor(1, 1, GenerateValue)
-};
+var model = new IAModel(withRandomValues: true);
+var gradients = new IAModel(withRandomValues: false);
 
 var trainingData = new Tensor(4, 3, new float[]
 {
@@ -109,16 +108,19 @@ Console.WriteLine("===== Tensors =====");
 PrintParameters(model, lossTensor);
 
 // Training
-for (var i = 0; i < 100000; i++)
+for (var i = 0; i < 100_000; i++)
 {
     var loss = Loss(trainingInput, trainingOutput, model);
-    var modelCopy = model.Copy();
 
-    TrainLayer(loss, trainingInput, trainingOutput, model.HiddenLayerWeights, modelCopy, modelCopy.HiddenLayerWeights);
-    TrainLayer(loss, trainingInput, trainingOutput, model.HiddenLayerBias, modelCopy, modelCopy.HiddenLayerBias);
+    CalculateGradients(loss, trainingInput, trainingOutput, model, model.HiddenLayerWeights, gradients.HiddenLayerWeights);
+    CalculateGradients(loss, trainingInput, trainingOutput, model, model.HiddenLayerBias, gradients.HiddenLayerBias);
+    CalculateGradients(loss, trainingInput, trainingOutput, model, model.OutputLayerWeights, gradients.OutputLayerWeights);
+    CalculateGradients(loss, trainingInput, trainingOutput, model, model.OutputLayerBias, gradients.OutputLayerBias);
 
-    TrainLayer(loss, trainingInput, trainingOutput, model.OutputLayerWeights, modelCopy, modelCopy.OutputLayerWeights);
-    TrainLayer(loss, trainingInput, trainingOutput, model.OutputLayerBias, modelCopy, modelCopy.OutputLayerBias);
+    Learn(model.HiddenLayerWeights, gradients.HiddenLayerWeights);
+    Learn(model.HiddenLayerBias, gradients.HiddenLayerBias);
+    Learn(model.OutputLayerWeights, gradients.OutputLayerWeights);
+    Learn(model.OutputLayerBias, gradients.OutputLayerBias);
 }
 
 Console.WriteLine("===== AFTER TRAINING =====");
@@ -142,21 +144,38 @@ for (var i = 0; i < 2; i++)
     }
 }
 
-public readonly record struct IAModel
+namespace HelloIA
 {
-    public required Tensor HiddenLayerWeights { get; init; }
-    public required Tensor HiddenLayerBias { get; init; }
-    public required Tensor OutputLayerWeights { get; init; }
-    public required Tensor OutputLayerBias { get; init; }
-
-    public IAModel Copy()
+    public record IAModel
     {
-        return new IAModel
+        private readonly Random _random = new(28);
+
+        public IAModel(bool withRandomValues)
         {
-            HiddenLayerWeights = HiddenLayerWeights.Copy(),
-            HiddenLayerBias = HiddenLayerBias.Copy(),
-            OutputLayerWeights = OutputLayerWeights.Copy(),
-            OutputLayerBias = OutputLayerBias.Copy()
-        };
+            if (withRandomValues)
+            {
+                HiddenLayerWeights = new Tensor(2, 2, GenerateValue);
+                HiddenLayerBias = new Tensor(1, 2, GenerateValue);
+                OutputLayerWeights = new Tensor(2, 1, GenerateValue);
+                OutputLayerBias = new Tensor(1, 1, GenerateValue);
+            }
+            else
+            {
+                HiddenLayerWeights = new Tensor(2, 2);
+                HiddenLayerBias = new Tensor(1, 2);
+                OutputLayerWeights = new Tensor(2, 1);
+                OutputLayerBias = new Tensor(1, 1);
+            }
+        }
+
+        public Tensor HiddenLayerWeights { get; init; }
+        public Tensor HiddenLayerBias { get; init; }
+        public Tensor OutputLayerWeights { get; init; }
+        public Tensor OutputLayerBias { get; init; }
+
+        private float GenerateValue(int rowIndex, int columnIndex)
+        {
+            return (_random.NextSingle() - 0.5f) * 2.0f;
+        }
     }
 }

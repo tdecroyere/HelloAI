@@ -114,7 +114,7 @@ public class TensorTests
     }
 
     [Fact]
-    public void RowView_ShouldHaveCorrectData_WhenValidIndexIsPassed()
+    public void ViewRow_ShouldHaveCorrectData_WhenValidIndexIsPassed()
     {
         // Arrange
         var tensor1 = new Tensor(4, 3, new float[] { 1, 2, 3, 
@@ -123,7 +123,7 @@ public class TensorTests
                                                      10, 11, 12 });
 
         // Act
-        var tensor2 = tensor1.RowView(1);
+        var tensor2 = tensor1.ViewRow(1);
 
         // Assert
         Assert.Equal(1, tensor2.Rows);
@@ -131,6 +131,26 @@ public class TensorTests
         Assert.Equal(4, tensor2[0]);
         Assert.Equal(5, tensor2[1]);
         Assert.Equal(6, tensor2[2]);
+    }
+    
+    [Fact]
+    public void ViewRow_ShouldHaveCorrectData_WhenFromOffsetAndValidIndexIsPassed()
+    {
+        // Arrange
+        var tensor1 = new Tensor(4, 3, new float[] { 1, 2, 3, 
+                                                     4, 5, 6, 
+                                                     7, 8, 9, 
+                                                     10, 11, 12 });
+
+        var tensor2 = tensor1.View(tensor1.Rows, 1, 2);
+
+        // Act
+        var tensor3 = tensor2.ViewRow(1);
+
+        // Assert
+        Assert.Equal(1, tensor3.Rows);
+        Assert.Equal(1, tensor3.Columns);
+        Assert.Equal(6, tensor3[0]);
     }
 
     [Fact]

@@ -5,7 +5,9 @@ namespace TensorLib;
 public readonly record struct Tensor
 {
     private readonly Memory<float> _data;
-    private readonly int _stride;
+
+    private readonly int _rowStride;
+    private readonly int _offset;
 
     public Tensor(int rows, int columns)
     {
@@ -13,45 +15,41 @@ public readonly record struct Tensor
         Columns = columns;
 
         _data = new float[rows * columns];
-        _stride = 0;
+        _rowStride = columns;
+        _offset = 0;
     }
 
     public Tensor(int rows, int columns, Func<int, int, float> generator) : this(rows, columns)
     {
         ArgumentNullException.ThrowIfNull(generator);
 
-        for (var i = 0; i < ElementCount; i++)
+        for (var i = 0; i < rows * columns; i++)
         {
             _data.Span[i] = generator(i, i);
         }
     }
 
-    public Tensor(int rows, int columns, Memory<float> data)
+    public Tensor(int rows, int columns, Memory<float> data) : this(rows, columns)
     {
         if (rows * columns != data.Length)
         {
             throw new ArgumentOutOfRangeException(nameof(data), "Data element count is not rows * columns.");
         }
-
-        Rows = rows;
-        Columns = columns;
-
-        _data = new float[data.Length];
+       
         data.CopyTo(_data);
-        _stride = 0;
     }
 
-    private Tensor(int rows, int columns, int offset, int stride, Tensor source)
+    private Tensor(int rows, int columns, int offset, int rowStride, Tensor source)
     {
         Rows = rows;
         Columns = columns;
-        _data = source._data[offset..];
-        _stride = stride;
+        _offset = offset;
+        _rowStride = rowStride;
+        _data = source._data;
     }
 
     public int Rows { get; }
     public int Columns { get; }
-    public int ElementCount => _data.Length; 
 
     public float this[int index]
     {
@@ -75,37 +73,33 @@ public readonly record struct Tensor
     {
         get
         {
-            return _data.Span[rowIndex * (Columns + _stride) + columnIndex];
+            return _data.Span[_offset + rowIndex * _rowStride + columnIndex];
         }
         set
         {
-            _data.Span[rowIndex * (Columns + _stride) + columnIndex] = value;
+            _data.Span[_offset + rowIndex * _rowStride + columnIndex] = value;
         }
     }
 
     public Tensor View(int rows, int columns)
     {
-        return new Tensor(rows, columns, 0, Columns - columns, this);
+        return new Tensor(rows, columns, 0, Columns, this);
     }
 
     public Tensor View(int rows, int columns, int columnOffset)
     {
-        return new Tensor(rows, columns, columnOffset, 1 + Columns - columnOffset, this);
+        return new Tensor(rows, columns, columnOffset, Columns, this);
     }
 
-    public Tensor RowView(int rowIndex)
+    public Tensor ViewRow(int rowIndex)
     {
-        return new Tensor(1, Columns, rowIndex * (Columns + _stride), _stride, this);
+        return new Tensor(1, Columns, _offset + rowIndex * _rowStride, _rowStride, this);
     }
 
     public Tensor Copy()
     {
-        // TODO: If we copy a "view" copy only the necessary data
-
-        var newData = new float[_data.Length];
-        _data.CopyTo(newData);
-
-        return new Tensor(Rows, Columns, newData);
+        // TODO: If we copy a "view", copy only the necessary data
+        return new Tensor(Rows, Columns, _data);
     }
 
     public override string ToString()
@@ -135,13 +129,10 @@ public readonly record struct Tensor
                 if (j > 0)
                 {
                     output.Append(',');
-                }
 
-                if (j > 0)
-                {
                     if (j % 8 == 0)
                     {
-                        output.AppendLine("");
+                        output.AppendLine();
 
                         for (var k = 0; k < padding; k++)
                         {
@@ -187,7 +178,7 @@ public readonly record struct Tensor
     {
         var result = tensor.Copy();
 
-        for (var i = 0; i < tensor.ElementCount; i++)
+        for (var i = 0; i < tensor.Rows * tensor.Columns; i++)
         {
             result[i] *= scalar;
         }
@@ -215,7 +206,6 @@ public readonly record struct Tensor
             {
                 var result = 0.0f;
 
-                // TODO: Iterate with common dim
                 for (var k = 0; k < tensor1.Columns; k++)
                 {
                     result += tensor1[i, k] * tensor2[k, j];
@@ -238,13 +228,11 @@ public readonly record struct Tensor
         // TODO: Check compatibility
         var resultData = new Tensor(tensor1.Rows, tensor1.Columns); 
 
-        // HACK: For now we only use the first element to make the bias work :)
-        for (var i = 0; i < tensor1._data.Length; i++)
+        for (var i = 0; i < tensor1.Rows * tensor1.Columns; i++)
         {
-            resultData[i] = tensor1._data.Span[i] + tensor2._data.Span[i];
+            resultData[i] = tensor1[i] + tensor2[i];
         }
         
-        // TODO: Change that
         return resultData;
     }
     
@@ -257,7 +245,7 @@ public readonly record struct Tensor
     {
         var result = tensor.Copy();
 
-        for (var i = 0; i < tensor.ElementCount; i++)
+        for (var i = 0; i < tensor.Rows * tensor.Columns; i++)
         {
             result[i] -= scalar;
         }
