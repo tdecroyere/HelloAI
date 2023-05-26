@@ -5,6 +5,7 @@ namespace TensorLib;
 public readonly record struct Tensor
 {
     private readonly Memory<float> _data;
+    private readonly int _stride;
 
     public Tensor(int rows, int columns)
     {
@@ -12,6 +13,7 @@ public readonly record struct Tensor
         Columns = columns;
 
         _data = new float[rows * columns];
+        _stride = 0;
     }
 
     public Tensor(int rows, int columns, Func<int, int, float> generator) : this(rows, columns)
@@ -36,14 +38,15 @@ public readonly record struct Tensor
 
         _data = new float[data.Length];
         data.CopyTo(_data);
+        _stride = 0;
     }
 
-    public Tensor(int rows, int columns, Tensor source)
+    private Tensor(int rows, int columns, int offset, int stride, Tensor source)
     {
         Rows = rows;
         Columns = columns;
-
-        _data = source._data;
+        _data = source._data[offset..];
+        _stride = stride;
     }
 
     public int Rows { get; }
@@ -54,11 +57,17 @@ public readonly record struct Tensor
     {
         get
         {
-            return _data.Span[index];
+            var rowIndex = index / Columns;
+            var columnIndex = index % Columns;
+        
+            return this[rowIndex, columnIndex];
         }
         set
         {
-            _data.Span[index] = value;
+            var rowIndex = index / Columns;
+            var columnIndex = index % Columns;
+            
+            this[rowIndex, columnIndex] = value;
         }
     }
 
@@ -66,16 +75,33 @@ public readonly record struct Tensor
     {
         get
         {
-            return _data.Span[rowIndex * Columns + columnIndex];
+            return _data.Span[rowIndex * (Columns + _stride) + columnIndex];
         }
         set
         {
-            _data.Span[rowIndex * Columns + columnIndex] = value;
+            _data.Span[rowIndex * (Columns + _stride) + columnIndex] = value;
         }
+    }
+
+    public Tensor View(int rows, int columns)
+    {
+        return new Tensor(rows, columns, 0, Columns - columns, this);
+    }
+
+    public Tensor View(int rows, int columns, int columnOffset)
+    {
+        return new Tensor(rows, columns, columnOffset, 1 + Columns - columnOffset, this);
+    }
+
+    public Tensor RowView(int rowIndex)
+    {
+        return new Tensor(1, Columns, rowIndex * (Columns + _stride), _stride, this);
     }
 
     public Tensor Copy()
     {
+        // TODO: If we copy a "view" copy only the necessary data
+
         var newData = new float[_data.Length];
         _data.CopyTo(newData);
 
@@ -128,7 +154,7 @@ public readonly record struct Tensor
                     }
                 }
 
-                output.Append(_data.Span[i * Columns + j].ToString(System.Globalization.CultureInfo.InvariantCulture));
+                output.Append(this[i, j].ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
 
             if (i < Rows - 1)
