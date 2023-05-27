@@ -1,15 +1,6 @@
 ﻿using TensorLib;
-using HelloIA;
 
-Tensor Linear(Tensor inputs, AIModel model)
-{
-    var y = Sigmoid(inputs * model.HiddenLayerWeights + model.HiddenLayerBias);
-    y = Sigmoid(y * model.OutputLayerWeights + model.OutputLayerBias);
-
-    return y;
-}
-
-float Loss(Tensor trainingInputs, Tensor trainingOutputs, AIModel model)
+float Loss(Tensor trainingInputs, Tensor trainingOutputs, NeuralNetwork model)
 {
     var result = 0.0f;
 
@@ -18,7 +9,7 @@ float Loss(Tensor trainingInputs, Tensor trainingOutputs, AIModel model)
         var inputs = trainingInputs.ViewRow(i);
         var outputs = trainingOutputs.ViewRow(i);
 
-        var y = Linear(inputs, model);
+        var y = model.Forward(inputs);
 
         for (var j = 0; j < y.Columns; j++)
         {
@@ -32,19 +23,26 @@ float Loss(Tensor trainingInputs, Tensor trainingOutputs, AIModel model)
     return result;
 }
 
-Tensor Sigmoid(Tensor x)
+void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput, NeuralNetwork model, NeuralNetwork gradients)
 {
-    // TODO: Create an exp method in factory
-    var result = new Tensor(x.Rows, x.Columns);
-
-    for (var i = 0; i < x.Rows * x.Columns; i++)
+    for (var i = 0; i < model.Weights.Length; i++)
     {
-        result[i] = 1.0f / (1.0f + MathF.Exp(-x[i]));
+        var layer = model.Weights.Span[i];
+        var gradientLayer = gradients.Weights.Span[i];
+
+        CalculateGradientsLayer(loss, trainingInput, trainingOutput, model, layer, gradientLayer);
     }
-    return result;
+    
+    for (var i = 0; i < model.Bias.Length; i++)
+    {
+        var layer = model.Bias.Span[i];
+        var gradientLayer = gradients.Bias.Span[i];
+
+        CalculateGradientsLayer(loss, trainingInput, trainingOutput, model, layer, gradientLayer);
+    }
 }
 
-void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput, AIModel model, Tensor layer, Tensor layerGradients)
+void CalculateGradientsLayer(float loss, Tensor trainingInput, Tensor trainingOutput, NeuralNetwork model, Tensor layer, Tensor layerGradients)
 {
     const float epsilon = 0.01f;
     
@@ -61,26 +59,31 @@ void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput,
     }
 }
 
-void Learn(Tensor layer, Tensor layerGradients)
+void Learn(NeuralNetwork model, NeuralNetwork gradients)
 {
     const float learningRate = 0.1f;
     
-    for (var j = 0; j < layer.Rows * layer.Columns; j++)
+    for (var i = 0; i < model.Weights.Length; i++)
     {
-        layer[j] -= layerGradients[j] * learningRate;
+        var layer = model.Weights.Span[i];
+        var layerGradients = gradients.Weights.Span[i];
+
+        for (var j = 0; j < layer.Rows * layer.Columns; j++)
+        {
+            layer[j] -= layerGradients[j] * learningRate;
+        }
     }
-}
+    
+    for (var i = 0; i < model.Bias.Length; i++)
+    {
+        var layer = model.Bias.Span[i];
+        var layerGradients = gradients.Bias.Span[i];
 
-void PrintParameters(AIModel model, float loss)
-{
-    Console.WriteLine($"iw: {model.HiddenLayerWeights}");
-    Console.WriteLine($"ib: {model.HiddenLayerBias}");
-    Console.WriteLine($"ow: {model.OutputLayerWeights}");
-    Console.WriteLine($"ob: {model.OutputLayerBias}");
-
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine($"Loss: {loss}");
-    Console.ForegroundColor = ConsoleColor.Gray;
+        for (var j = 0; j < layer.Rows * layer.Columns; j++)
+        {
+            layer[j] -= layerGradients[j] * learningRate;
+        }
+    }
 }
 
 var trainingData = new Tensor(4, 3, new float[]
@@ -95,37 +98,35 @@ var trainingInput = trainingData.View(trainingData.Rows, 2);
 var trainingOutput = trainingData.View(trainingData.Rows, 1, 2);
 
 // BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
-var model = new AIModel(withRandomValues: true);
-var gradients = new AIModel(withRandomValues: false);
+var topology = new int[] { 2, 2, 1 };
+
+var model = new NeuralNetwork(topology);
+var gradients = new NeuralNetwork(topology);
 
 Console.WriteLine("===== Training Data =====");
 Console.WriteLine(trainingInput);
 Console.WriteLine(trainingOutput);
 
-var lossTensor = Loss(trainingInput, trainingOutput, model);
+var loss = Loss(trainingInput, trainingOutput, model);
 
 Console.WriteLine("===== Tensors =====");
-PrintParameters(model, lossTensor);
+Console.WriteLine(model);
+Console.WriteLine($"Loss: {loss}");
 
 // Training
 for (var i = 0; i < 100_000; i++)
 {
-    var loss = Loss(trainingInput, trainingOutput, model);
+    loss = Loss(trainingInput, trainingOutput, model);
 
-    CalculateGradients(loss, trainingInput, trainingOutput, model, model.HiddenLayerWeights, gradients.HiddenLayerWeights);
-    CalculateGradients(loss, trainingInput, trainingOutput, model, model.HiddenLayerBias, gradients.HiddenLayerBias);
-    CalculateGradients(loss, trainingInput, trainingOutput, model, model.OutputLayerWeights, gradients.OutputLayerWeights);
-    CalculateGradients(loss, trainingInput, trainingOutput, model, model.OutputLayerBias, gradients.OutputLayerBias);
-
-    Learn(model.HiddenLayerWeights, gradients.HiddenLayerWeights);
-    Learn(model.HiddenLayerBias, gradients.HiddenLayerBias);
-    Learn(model.OutputLayerWeights, gradients.OutputLayerWeights);
-    Learn(model.OutputLayerBias, gradients.OutputLayerBias);
+    CalculateGradients(loss, trainingInput, trainingOutput, model, gradients);
+    Learn(model, gradients);
 }
 
+loss = Loss(trainingInput, trainingOutput, model);
+
 Console.WriteLine("===== AFTER TRAINING =====");
-var finalLossTensor = Loss(trainingInput, trainingOutput, model);
-PrintParameters(model, finalLossTensor);
+Console.WriteLine(model);
+Console.WriteLine($"Loss: {loss}");
 
 Console.WriteLine("===== TEST =====");
 
@@ -139,7 +140,7 @@ for (var i = 0; i < 2; i++)
         // TODO: To Replace
         var inputs = new Tensor(1, 2, new float[] { x1, x2 });
         
-        var y = Linear(inputs, model);
+        var y = model.Forward(inputs);
         Console.WriteLine($"{x1} ^ {x2} = {y}");
     }
 }
