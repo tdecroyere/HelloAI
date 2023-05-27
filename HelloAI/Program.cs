@@ -1,7 +1,7 @@
 ﻿using TensorLib;
 using HelloIA;
 
-Tensor Linear(Tensor inputs, IAModel model)
+Tensor Linear(Tensor inputs, AIModel model)
 {
     var y = Sigmoid(inputs * model.HiddenLayerWeights + model.HiddenLayerBias);
     y = Sigmoid(y * model.OutputLayerWeights + model.OutputLayerBias);
@@ -9,7 +9,7 @@ Tensor Linear(Tensor inputs, IAModel model)
     return y;
 }
 
-float Loss(Tensor trainingInputs, Tensor trainingOutputs, IAModel model)
+float Loss(Tensor trainingInputs, Tensor trainingOutputs, AIModel model)
 {
     var result = 0.0f;
 
@@ -44,7 +44,7 @@ Tensor Sigmoid(Tensor x)
     return result;
 }
 
-void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput, IAModel model, Tensor layer, Tensor layerGradients)
+void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput, AIModel model, Tensor layer, Tensor layerGradients)
 {
     const float epsilon = 0.01f;
     
@@ -71,7 +71,7 @@ void Learn(Tensor layer, Tensor layerGradients)
     }
 }
 
-void PrintParameters(IAModel model, float loss)
+void PrintParameters(AIModel model, float loss)
 {
     Console.WriteLine($"iw: {model.HiddenLayerWeights}");
     Console.WriteLine($"ib: {model.HiddenLayerBias}");
@@ -83,10 +83,6 @@ void PrintParameters(IAModel model, float loss)
     Console.ForegroundColor = ConsoleColor.Gray;
 }
 
-// BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
-var model = new IAModel(withRandomValues: true);
-var gradients = new IAModel(withRandomValues: false);
-
 var trainingData = new Tensor(4, 3, new float[]
 {
     0.0f, 0.0f, 0.0f,
@@ -97,6 +93,10 @@ var trainingData = new Tensor(4, 3, new float[]
 
 var trainingInput = trainingData.View(trainingData.Rows, 2);
 var trainingOutput = trainingData.View(trainingData.Rows, 1, 2);
+
+// BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
+var model = new AIModel(withRandomValues: true);
+var gradients = new AIModel(withRandomValues: false);
 
 Console.WriteLine("===== Training Data =====");
 Console.WriteLine(trainingInput);
@@ -141,41 +141,5 @@ for (var i = 0; i < 2; i++)
         
         var y = Linear(inputs, model);
         Console.WriteLine($"{x1} ^ {x2} = {y}");
-    }
-}
-
-namespace HelloIA
-{
-    public record IAModel
-    {
-        private readonly Random _random = new(28);
-
-        public IAModel(bool withRandomValues)
-        {
-            if (withRandomValues)
-            {
-                HiddenLayerWeights = new Tensor(2, 2, GenerateValue);
-                HiddenLayerBias = new Tensor(1, 2, GenerateValue);
-                OutputLayerWeights = new Tensor(2, 1, GenerateValue);
-                OutputLayerBias = new Tensor(1, 1, GenerateValue);
-            }
-            else
-            {
-                HiddenLayerWeights = new Tensor(2, 2);
-                HiddenLayerBias = new Tensor(1, 2);
-                OutputLayerWeights = new Tensor(2, 1);
-                OutputLayerBias = new Tensor(1, 1);
-            }
-        }
-
-        public Tensor HiddenLayerWeights { get; init; }
-        public Tensor HiddenLayerBias { get; init; }
-        public Tensor OutputLayerWeights { get; init; }
-        public Tensor OutputLayerBias { get; init; }
-
-        private float GenerateValue(int rowIndex, int columnIndex)
-        {
-            return (_random.NextSingle() - 0.5f) * 2.0f;
-        }
     }
 }
