@@ -1,6 +1,7 @@
 namespace TensorLib;
 
 // TODO: Memory management?
+// TODO: Review each memory copy and look at perf!
 
 public readonly record struct Tensor
 {
@@ -81,6 +82,14 @@ public readonly record struct Tensor
         }
     }
 
+    public void Zero()
+    {
+        for (var i = 0; i < Rows * Columns; i++)
+        {
+            this[i] = 0.0f;
+        }
+    }
+
     public Tensor View(int rows, int columns)
     {
         return new Tensor(rows, columns, 0, Columns, this);
@@ -98,11 +107,22 @@ public readonly record struct Tensor
 
     public Tensor Copy()
     {
-        // TODO: If we copy a "view", copy only the necessary data
-        return new Tensor(Rows, Columns, _data);
+        var dataCopy = new float[Rows * Columns];
+
+        for (var i = 0; i < Rows * Columns; i++)
+        {
+            dataCopy[i] = this[i];
+        }
+
+        return new Tensor(Rows, Columns, dataCopy);
     }
 
     public override string ToString()
+    {
+        return ToString("Tensor");
+    }
+
+    public string ToString(string name)
     {
         var output = new StringBuilder();
 
@@ -111,7 +131,7 @@ public readonly record struct Tensor
             output.AppendLine();
         }
 
-        output.Append("Tensor(");
+        output.Append($"{name}(");
 
         if (Rows > 1)
         {

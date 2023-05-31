@@ -18,13 +18,16 @@ float Loss(Tensor trainingInputs, Tensor trainingOutputs, NeuralNetwork model)
         }
     }
 
-    // TODO: Problem if we have multiple columns in the output tensor
     result /= trainingInputs.Rows;
     return result;
 }
 
-void CalculateGradients(float loss, Tensor trainingInput, Tensor trainingOutput, NeuralNetwork model, NeuralNetwork gradients)
+void CalculateGradients(Tensor trainingInput, Tensor trainingOutput, NeuralNetwork model, NeuralNetwork gradients)
 {
+    gradients.Zero();
+
+    var loss = Loss(trainingInput, trainingOutput, model);
+
     for (var i = 0; i < model.Weights.Length; i++)
     {
         var layer = model.Weights.Span[i];
@@ -59,6 +62,72 @@ void CalculateGradientsLayer(float loss, Tensor trainingInput, Tensor trainingOu
     }
 }
 
+void CalculateBackPropagation(Tensor trainingInput, Tensor trainingOutput, NeuralNetwork model, NeuralNetwork gradients)
+{
+    gradients.Zero();
+    var trainingCount = trainingInput.Rows;
+    
+    for (var i = 0; i < trainingCount; i++)
+    {
+        var inputs = trainingInput.ViewRow(i);
+        var outputs = trainingOutput.ViewRow(i);
+        var y = model.Forward(inputs);
+    
+        // IMPORTANT: this one is critical!!!!
+        for (var j = 0; j < gradients.Activations.Length; j++)
+        {
+            gradients.Activations.Span[j].Zero();
+        }
+
+        // Assign result gradient to the output gradient activation layer
+        var outputGradientActivation = gradients.Activations.Span[^1];
+
+        for (var j = 0; j < y.Columns; j++)
+        {
+            outputGradientActivation[j] = y[j] - outputs[j]; 
+        }
+
+        // Process current layer
+        for (var l = model.Weights.Length; l > 0; l--)
+        {
+            // TODO: This could be done with tensor operations
+            for (var j = 0; j < model.Activations.Span[l].Columns; j++)
+            {
+                var a = model.Activations.Span[l][0, j];
+                var da = gradients.Activations.Span[l][0, j];
+
+                gradients.Bias.Span[l - 1][0, j] += 2 * da * a * (1 - a);
+
+                for (var k = 0; k < model.Activations.Span[l - 1].Columns; k++)
+                {
+                    // pa = previous activation
+                    var pa = model.Activations.Span[l - 1][0, k];
+                    var w = model.Weights.Span[l - 1][k, j];
+
+                    gradients.Weights.Span[l - 1][k, j] += 2 * da * a * (1 -  a) * pa;
+                    gradients.Activations.Span[l - 1][0, k] += 2 * da * a * (1 -  a) * w;
+                }
+            }
+        }
+    }
+
+    for (var i = 0; i < gradients.Weights.Length; i++)
+    {
+        for (var j = 0; j < gradients.Weights.Span[i].Rows * gradients.Weights.Span[i].Columns; j++)
+        {
+            gradients.Weights.Span[i][j] /= (float)trainingCount;
+        }
+    }
+
+    for (var i = 0; i < gradients.Bias.Length; i++)
+    {
+        for (var j = 0; j < gradients.Bias.Span[i].Rows * gradients.Bias.Span[i].Columns; j++)
+        {
+            gradients.Bias.Span[i][j] /= (float)trainingCount;
+        }
+    }
+}
+
 void Learn(NeuralNetwork model, NeuralNetwork gradients)
 {
     const float learningRate = 0.1f;
@@ -86,6 +155,13 @@ void Learn(NeuralNetwork model, NeuralNetwork gradients)
     }
 }
 
+void PrintSection(string name)
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine($"===== {name} =====");
+    Console.ForegroundColor = ConsoleColor.Gray;
+}
+
 var trainingData = new Tensor(4, 3, new float[]
 {
     0.0f, 0.0f, 0.0f,
@@ -103,32 +179,49 @@ var topology = new int[] { 2, 2, 1 };
 var model = new NeuralNetwork(topology);
 var gradients = new NeuralNetwork(topology);
 
-Console.WriteLine("===== Training Data =====");
+var oldModel = new NeuralNetwork(topology);
+var oldGradients = new NeuralNetwork(topology);
+
+PrintSection("Training Data");
 Console.WriteLine(trainingInput);
 Console.WriteLine(trainingOutput);
 
 var loss = Loss(trainingInput, trainingOutput, model);
 
-Console.WriteLine("===== Tensors =====");
+PrintSection("Tensors");
 Console.WriteLine(model);
+
+Console.ForegroundColor = ConsoleColor.White;
 Console.WriteLine($"Loss: {loss}");
+Console.ForegroundColor = ConsoleColor.Gray;
 
 // Training
-for (var i = 0; i < 100_000; i++)
-{
-    loss = Loss(trainingInput, trainingOutput, model);
+const int trainingCount = 100_000;
+Console.WriteLine($"Training for {trainingCount} iterations...");
 
-    CalculateGradients(loss, trainingInput, trainingOutput, model, gradients);
+for (var i = 0; i < trainingCount; i++)
+{
+    CalculateGradients(trainingInput, trainingOutput, oldModel, oldGradients);
+    CalculateBackPropagation(trainingInput, trainingOutput, model, gradients);
+
     Learn(model, gradients);
+    Learn(oldModel, oldGradients);
 }
 
 loss = Loss(trainingInput, trainingOutput, model);
+var oldLoss = Loss(trainingInput, trainingOutput, oldModel);
 
-Console.WriteLine("===== AFTER TRAINING =====");
+PrintSection("After Training (Model)");
 Console.WriteLine(model);
-Console.WriteLine($"Loss: {loss}");
 
-Console.WriteLine("===== TEST =====");
+PrintSection("After Training (Old Model)");
+Console.WriteLine(oldModel);
+
+Console.ForegroundColor = ConsoleColor.White;
+Console.WriteLine($"Loss: {loss}, Old Loss {oldLoss}");
+Console.ForegroundColor = ConsoleColor.Gray;
+
+PrintSection("Test");
 
 for (var i = 0; i < 2; i++)
 {
@@ -139,8 +232,8 @@ for (var i = 0; i < 2; i++)
     
         // TODO: To Replace
         var inputs = new Tensor(1, 2, new float[] { x1, x2 });
-        
         var y = model.Forward(inputs);
+
         Console.WriteLine($"{x1} ^ {x2} = {y}");
     }
 }
