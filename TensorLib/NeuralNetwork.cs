@@ -87,11 +87,16 @@ public record NeuralNetwork
     
     private float GenerateValue(int rowIndex, int columnIndex)
     {
-        // BUG: Again here 0.0 to 1.0 seems to work better :(
+        // RELU is the best for now but works only in the 0.0 - 1.0 range!
+        //
+        // BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
         return _random.NextSingle();
         //return (_random.NextSingle() - 0.5f) * 2.0f;
     }
 
+    // TODO: We should move the activation operations to the tensor
+    // so we can do automatic back propagation.
+    // The NN can use whatever tensor operation in the linear function
     private static Tensor Sigmoid(Tensor x)
     {
         // TODO: Create an exp method in factory
@@ -99,7 +104,9 @@ public record NeuralNetwork
 
         for (var i = 0; i < x.Rows * x.Columns; i++)
         {
-            result[i] = 1.0f / (1.0f + MathF.Exp(-x[i]));
+            result[i] = x[i] > 0.0f ? x[i] : 0.0f; // RELU
+            //result[i] = MathF.Tanh(x[i]); // TanH ?
+            //result[i] = 1.0f / (1.0f + MathF.Exp(-x[i])); // Sigmoid
         }
 
         return result;

@@ -62,6 +62,13 @@ void CalculateGradientsLayer(float loss, Tensor trainingInput, Tensor trainingOu
     }
 }
 
+float BackwardActivation(float x)
+{
+    return x > 0.0f ? 1.0f : 0.0f; // RELU
+    //return 1.0f - x * x; // TanH
+    //return x * (1 - x); // Sigmoid
+}
+
 void CalculateBackPropagation(Tensor trainingInput, Tensor trainingOutput, NeuralNetwork model, NeuralNetwork gradients)
 {
     gradients.Zero();
@@ -96,7 +103,7 @@ void CalculateBackPropagation(Tensor trainingInput, Tensor trainingOutput, Neura
                 var a = model.Activations.Span[l][0, j];
                 var da = gradients.Activations.Span[l][0, j];
 
-                gradients.Bias.Span[l - 1][0, j] += 2 * da * a * (1 - a);
+                gradients.Bias.Span[l - 1][0, j] += 2 * da * BackwardActivation(a);
 
                 for (var k = 0; k < model.Activations.Span[l - 1].Columns; k++)
                 {
@@ -104,8 +111,8 @@ void CalculateBackPropagation(Tensor trainingInput, Tensor trainingOutput, Neura
                     var pa = model.Activations.Span[l - 1][0, k];
                     var w = model.Weights.Span[l - 1][k, j];
 
-                    gradients.Weights.Span[l - 1][k, j] += 2 * da * a * (1 -  a) * pa;
-                    gradients.Activations.Span[l - 1][0, k] += 2 * da * a * (1 -  a) * w;
+                    gradients.Weights.Span[l - 1][k, j] += 2 * da * BackwardActivation(a) * pa;
+                    gradients.Activations.Span[l - 1][0, k] += 2 * da * BackwardActivation(a) * w;
                 }
             }
         }
@@ -173,7 +180,6 @@ var trainingData = new Tensor(4, 3, new float[]
 var trainingInput = trainingData.View(trainingData.Rows, 2);
 var trainingOutput = trainingData.View(trainingData.Rows, 1, 2);
 
-// BUG: If we start with weights in the [-10.0f 10.0f] range we cannot train the network
 var topology = new int[] { 2, 2, 1 };
 
 var model = new NeuralNetwork(topology);
@@ -196,7 +202,7 @@ Console.WriteLine($"Loss: {loss}");
 Console.ForegroundColor = ConsoleColor.Gray;
 
 // Training
-const int trainingCount = 100_000;
+const int trainingCount = 200;
 Console.WriteLine($"Training for {trainingCount} iterations...");
 
 for (var i = 0; i < trainingCount; i++)
@@ -230,10 +236,9 @@ for (var i = 0; i < 2; i++)
         var x1 = (float)i;
         var x2 = (float)j;
     
-        // TODO: To Replace
         var inputs = new Tensor(1, 2, new float[] { x1, x2 });
         var y = model.Forward(inputs);
 
-        Console.WriteLine($"{x1} ^ {x2} = {y}");
+        Console.WriteLine($"{x1} ^ {x2} = {(int)MathF.Round(y[0])}");
     }
 }
