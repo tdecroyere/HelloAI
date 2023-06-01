@@ -31,6 +31,56 @@ public class TensorTests
         // Assert
         Assert.NotEqual(5.0f, tensor[0]);
     }
+
+    [Fact]
+    public void Zero_ShouldEraseData_WhenTensorContainsData()
+    {
+        // Arrange
+        var tensor = new Tensor(1, 3, new float[] { 1.0f, 2.0f, 3.0f });
+
+        // Act
+        tensor.Zero();
+
+        // Assert
+        Assert.Equal(0.0f, tensor[0]);
+        Assert.Equal(0.0f, tensor[1]);
+        Assert.Equal(0.0f, tensor[2]);
+    }
+    
+    [Fact]
+    public void Zero_ShouldOnlyEraseViewData_WhenFromALargerTensor()
+    {
+        // Arrange
+        var tensor1 = new Tensor(4, 3, new float[] { 1, 2, 3, 
+                                                     4, 5, 6, 
+                                                     7, 8, 9, 
+                                                     10, 11, 12 });
+        var tensor = tensor1.View(1, 3);
+
+        // Act
+        tensor.Zero();
+
+        // Assert
+        Assert.Equal(0.0f, tensor[0]);
+        Assert.Equal(0.0f, tensor[1]);
+        Assert.Equal(0.0f, tensor[2]);
+        
+        Assert.Equal(0.0f, tensor1[0, 0]);
+        Assert.Equal(0.0f, tensor1[0, 1]);
+        Assert.Equal(0.0f, tensor1[0, 2]);
+
+        Assert.Equal(4.0f, tensor1[1, 0]);
+        Assert.Equal(5.0f, tensor1[1, 1]);
+        Assert.Equal(6.0f, tensor1[1, 2]);
+
+        Assert.Equal(7.0f, tensor1[2, 0]);
+        Assert.Equal(8.0f, tensor1[2, 1]);
+        Assert.Equal(9.0f, tensor1[2, 2]);
+
+        Assert.Equal(10.0f, tensor1[3, 0]);
+        Assert.Equal(11.0f, tensor1[3, 1]);
+        Assert.Equal(12.0f, tensor1[3, 2]);
+    }
  
     [Fact]
     public void View_ShouldHaveModifiedData_WhenOtherTensorModifySameData()
@@ -154,7 +204,65 @@ public class TensorTests
     }
 
     [Fact]
-    public void Multiply_ShouldHaveCorrectResults_WhenDifferentDimensions()
+    public void Copy_ShouldHaveCorrectResults_WhenSourceNotAView()
+    {
+        // Arrange
+        var tensor1 = new Tensor(4, 3, new float[] { 1, 2, 3, 
+                                                     4, 5, 6, 
+                                                     7, 8, 9, 
+                                                     10, 11, 12 });
+
+        // Act
+        var copy = tensor1.Copy();
+
+        // Assert
+        Assert.Equal(4, copy.Rows);
+        Assert.Equal(3, copy.Columns);
+
+        Assert.Equal(1, copy[0, 0]);
+        Assert.Equal(2, copy[0, 1]);
+        Assert.Equal(3, copy[0, 2]);
+
+        Assert.Equal(4, copy[1, 0]);
+        Assert.Equal(5, copy[1, 1]);
+        Assert.Equal(6, copy[1, 2]);
+
+        Assert.Equal(7, copy[2, 0]);
+        Assert.Equal(8, copy[2, 1]);
+        Assert.Equal(9, copy[2, 2]);
+
+        Assert.Equal(10, copy[3, 0]);
+        Assert.Equal(11, copy[3, 1]);
+        Assert.Equal(12, copy[3, 2]);
+    }
+
+    [Fact]
+    public void Copy_ShouldHaveCorrectResults_WhenSourceView()
+    {
+        // Arrange
+        var tensor1 = new Tensor(4, 3, new float[] { 1, 2, 3, 
+                                                     4, 5, 6, 
+                                                     7, 8, 9, 
+                                                     10, 11, 12 });
+
+        var tensor2 = tensor1.View(2, 2, 1);
+
+        // Act
+        var copy = tensor2.Copy();
+
+        // Assert
+        Assert.Equal(2, copy.Rows);
+        Assert.Equal(2, copy.Columns);
+
+        Assert.Equal(2, copy[0, 0]);
+        Assert.Equal(3, copy[0, 1]);
+
+        Assert.Equal(5, copy[1, 0]);
+        Assert.Equal(6, copy[1, 1]);
+    }
+    
+    [Fact]
+    public void Multiply_ShouldHaveCorrectResults_WhenTensorsDifferentDimensions()
     {
         // Arrange
         var tensor1 = new Tensor(1, 2, new float[] { 1.5f, 2.5f });
@@ -164,6 +272,9 @@ public class TensorTests
         var result = tensor1 * tensor2;
 
         // Assert
+        Assert.NotEqual(result, tensor1);
+        Assert.NotEqual(result, tensor2);
+
         Assert.Equal(result.Rows, tensor1.Rows);
         Assert.Equal(result.Columns, tensor2.Columns);
         Assert.Equal(tensor1[0, 0] * tensor2[0, 0] + tensor1[0, 1] * tensor2[1, 0], result[0, 0]);
@@ -171,7 +282,7 @@ public class TensorTests
     }
 
     [Fact]
-    public void Multiply_ShouldThrowArgumentOutOfRangeException_WhenIncompatibleDimensions()
+    public void Multiply_ShouldThrowArgumentOutOfRangeException_WhenTensorsIncompatibleDimensions()
     {
         // Arrange
         var tensor1 = new Tensor(2, 3);
@@ -182,5 +293,24 @@ public class TensorTests
 
         // Assert
         Assert.Throws<ArgumentOutOfRangeException>(action);
+    }
+
+    [Fact]
+    public void Multiply_ShouldHaveCorrectResults_WhenScalarData()
+    {
+        // Arrange
+        var tensor = new Tensor(1, 3, new float[] { 1.0f, 2.0f, 3.0f });
+
+        // Act
+        var result = tensor * 3.0f;
+
+        // Assert
+        Assert.NotEqual(result, tensor);
+
+        Assert.Equal(1, result.Rows);
+        Assert.Equal(3, result.Columns);
+        Assert.Equal(3.0f, result[0]);
+        Assert.Equal(6.0f, result[1]);
+        Assert.Equal(9.0f, result[2]);
     }
 }

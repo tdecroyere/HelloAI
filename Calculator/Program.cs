@@ -169,24 +169,34 @@ void PrintSection(string name)
     Console.ForegroundColor = ConsoleColor.Gray;
 }
 
-var trainingData = new Tensor(4, 3, new float[]
+var trainingMaxNumber = 10;
+
+var trainingDataFloat = new float[trainingMaxNumber * trainingMaxNumber * 3];
+
+for (var i = 0; i < trainingMaxNumber; i++)
 {
-    0.0f, 0.0f, 0.0f,
-    1.0f, 0.0f, 1.0f,
-    0.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 0.0f
-});
+    for (var j = 0; j < trainingMaxNumber; j++)
+    {
+        trainingDataFloat[i * trainingMaxNumber * 3 + (j * 3)] = i;
+        trainingDataFloat[i * trainingMaxNumber * 3 + (j * 3) + 1] = j;
+        trainingDataFloat[i * trainingMaxNumber * 3 + (j * 3) + 2] = i + j;
+    }
+}
+
+var trainingData = new Tensor(trainingMaxNumber * trainingMaxNumber, 3, trainingDataFloat);
 
 var trainingInput = trainingData.View(trainingData.Rows, 2);
 var trainingOutput = trainingData.View(trainingData.Rows, 1, 2);
 
-var topology = new int[] { 2, 2, 1 };
+var topology = new int[] { 2, 20, 1 };
 
 var model = new NeuralNetwork(topology);
 var gradients = new NeuralNetwork(topology);
 
 var oldModel = new NeuralNetwork(topology);
 var oldGradients = new NeuralNetwork(topology);
+
+Console.WriteLine("============= Calculator ============");
 
 PrintSection("Training Data");
 Console.WriteLine(trainingInput);
@@ -239,6 +249,6 @@ for (var i = 0; i < 2; i++)
         var inputs = new Tensor(1, 2, new float[] { x1, x2 });
         var y = model.Forward(inputs);
 
-        Console.WriteLine($"{x1} ^ {x2} = {(int)MathF.Round(y[0])} ({y})");
+        Console.WriteLine($"{x1} + {x2} = {(int)MathF.Round(y[0])} ({y})");
     }
 }
